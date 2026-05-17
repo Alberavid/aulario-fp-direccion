@@ -1264,9 +1264,10 @@ body.is-mobile-layout .mobile-schedule {
     <script>
 const dayOrder = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 const storageKey = "aulario-fp-csv-v1";
-const targetStorageKey = "aulario-fp-teacher-target-hours-v1";
+const targetStorageKey = "aulario-fp-teacher-target-hours-v2";
 const defaultClassMinutes = 55;
 const defaultWeeklyTargetHours = 25;
+const defaultWeeklyTargetMinutes = defaultWeeklyTargetHours * 60;
 const sixtyMinuteSlots = new Set(["16:00", "17:00", "18:00", "19:00", "20:00"]);
 const appRole = document.body.dataset.role || "staff";
 const isTeacherPortal = appRole === "teacher";
@@ -1530,10 +1531,11 @@ function normalizeRows(records) {
     group: findColumn(headers, ["grupo"]),
     teacher: findColumn(headers, ["profesor"]),
     site: findColumn(headers, ["sede"]),
+    contractedOccupancy: findColumn(headers, ["ocupacion contratada", "ocupación contratada"]),
   };
 
   const missing = Object.entries(indexes)
-    .filter(([, index]) => index === -1)
+    .filter(([key, index]) => key !== "contractedOccupancy" && index === -1)
     .map(([key]) => requiredLabels[key]);
   if (missing.length) {
     throw new Error(`Faltan columnas: ${missing.join(", ")}.`);
@@ -1565,6 +1567,8 @@ function normalizeRows(records) {
         group: clean(row[indexes.group]),
         teacher,
         site,
+        contractedOccupancyPercent:
+          indexes.contractedOccupancy === -1 ? null : parseContractedOccupancy(row[indexes.contractedOccupancy]),
         searchText: "",
       };
     })
@@ -1653,6 +1657,14 @@ function shiftFromMinutes(minutes) {
 
 function durationForTime(time) {
   return sixtyMinuteSlots.has(clean(time)) ? 60 : defaultClassMinutes;
+}
+
+function parseContractedOccupancy(value = "") {
+  const raw = clean(value).replace("%", "").replace(",", ".");
+  if (!raw) return null;
+  const number = Number(raw);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return number <= 1 ? number * 100 : number;
 }
 
 function sortSessions(a, b) {
@@ -2117,19 +2129,23 @@ function buildTeacherEntity(name, rows) {
   }
 
   const totalMinutes = sumDuration(rows);
-  const targetHours = getTeacherTargetHours(name);
+  const contractedPercent = contractedPercentForRows(rows);
+  const targetHours = getTeacherTargetHours(name, rows);
   const occupancy = occupancyPercent(totalMinutes, targetHours);
   const labelSuffix = elements.dayFilter.value ? "en selección" : "semanales";
   return createEntityCard({
     title: name,
     label: `${formatHours(totalMinutes)} ${labelSuffix}`,
     metric: {
-      label: `Ocupación sobre ${formatTargetHours(targetHours)}`,
+      label: contractedPercent
+        ? `Contrato ${formatPercent(contractedPercent)} (${formatTargetHours(targetHours)})`
+        : `Ocupación sobre ${formatTargetHours(targetHours)}`,
       value: `${occupancy}%`,
       percent: occupancy,
     },
     chips: [
       `${rows.length} clases`,
+      contractedPercent ? `${formatPercent(contractedPercent)} contratado` : "",
       formatUnique(rows, "site"),
       `${rooms} ${rooms === 1 ? "aula" : "aulas"}`,
       `${days} ${days === 1 ? "día" : "días"}`,
@@ -2226,7 +2242,8 @@ function renderOccupancyView() {
 
 function createOccupancyCard(name, rows) {
   const totalMinutes = sumDuration(rows);
-  const targetHours = getTeacherTargetHours(name);
+  const contractedPercent = contractedPercentForRows(rows);
+  const targetHours = getTeacherTargetHours(name, rows);
   const occupancy = occupancyPercent(totalMinutes, targetHours);
   const article = document.createElement("article");
   article.className = "occupancy-card";
@@ -2241,7 +2258,9 @@ function createOccupancyCard(name, rows) {
   const control = document.createElement("label");
   control.className = "target-control";
   const label = document.createElement("span");
-  label.textContent = "Base h/semana";
+  label.textContent = contractedPercent
+    ? `Base h/semana · contrato ${formatPercent(contractedPercent)}`
+    : "Base h/semana";
   const input = document.createElement("input");
   input.type = "number";
   input.min = "1";
@@ -2252,7 +2271,9 @@ function createOccupancyCard(name, rows) {
   control.append(label, input);
 
   const metric = createMetricBlock({
-    label: `Ocupación sobre ${formatTargetHours(targetHours)}`,
+    label: contractedPercent
+      ? `Contrato ${formatPercent(contractedPercent)} (${formatTargetHours(targetHours)})`
+      : `Ocupación sobre ${formatTargetHours(targetHours)}`,
     value: `${occupancy}%`,
     percent: occupancy,
   });
@@ -2539,13 +2560,34 @@ function formatHours(minutes) {
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
 
-function getTeacherTargetHours(name) {
+function getTeacherTargetHours(name, rows = []) {
   const configured = Number(state.teacherTargets[name]);
-  return Number.isFinite(configured) && configured > 0 ? configured : defaultWeeklyTargetHours;
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  const contractedPercent = contractedPercentForRows(rows);
+  if (!isTeacherPortal && contractedPercent) {
+    return (defaultWeeklyTargetMinutes * contractedPercent) / 100 / 60;
+  }
+  return defaultWeeklyTargetHours;
 }
 
 function formatTargetHours(hours) {
   return Number.isInteger(hours) ? `${hours} h` : `${hours.toString().replace(".", ",")} h`;
+}
+
+function formatPercent(percent) {
+  return `${Number.isInteger(percent) ? percent : percent.toFixed(1).replace(".", ",")}%`;
+}
+
+function contractedPercentForRows(rows) {
+  const counts = rows.reduce((map, row) => {
+    const percent = row.contractedOccupancyPercent;
+    if (!Number.isFinite(percent) || percent <= 0) return map;
+    const key = String(percent);
+    map.set(key, (map.get(key) || 0) + 1);
+    return map;
+  }, new Map());
+  const [value] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] || [];
+  return value ? Number(value) : null;
 }
 
 function occupancyPercent(minutes, targetHours) {
