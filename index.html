@@ -784,6 +784,27 @@ body.is-mobile-layout .mobile-schedule {
   padding: 0 12px;
 }
 
+.contract-block {
+  display: grid;
+  gap: 7px;
+  border-radius: 16px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  padding: 12px;
+}
+
+.contract-block strong {
+  color: #9a3412;
+  font-size: 0.95rem;
+  font-weight: 950;
+}
+
+.contract-block span {
+  color: #7c4a22;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
 .entity-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1263,7 +1284,7 @@ body.is-mobile-layout .mobile-schedule {
     </template>
     <script>
 const dayOrder = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-const storageKey = "aulario-fp-csv-v1";
+const storageKey = "aulario-fp-csv-v2";
 const targetStorageKey = "aulario-fp-teacher-target-hours-v2";
 const defaultClassMinutes = 55;
 const defaultWeeklyTargetHours = 25;
@@ -2255,24 +2276,11 @@ function createOccupancyCard(name, rows) {
   total.textContent = formatHours(totalMinutes);
   header.append(title, total);
 
-  const control = document.createElement("label");
-  control.className = "target-control";
-  const label = document.createElement("span");
-  label.textContent = contractedPercent
-    ? `Base h/semana · contrato ${formatPercent(contractedPercent)}`
-    : "Base h/semana";
-  const input = document.createElement("input");
-  input.type = "number";
-  input.min = "1";
-  input.max = "60";
-  input.step = "0.5";
-  input.value = String(targetHours);
-  input.addEventListener("change", () => updateTeacherTarget(name, input.value));
-  control.append(label, input);
+  const contractBlock = createContractBlock({ contractedPercent, targetHours, totalMinutes, occupancy, name });
 
   const metric = createMetricBlock({
     label: contractedPercent
-      ? `Contrato ${formatPercent(contractedPercent)} (${formatTargetHours(targetHours)})`
+      ? `Cálculo con contrato CSV: ${formatHours(totalMinutes)} / ${formatTargetHours(targetHours)}`
       : `Ocupación sobre ${formatTargetHours(targetHours)}`,
     value: `${occupancy}%`,
     percent: occupancy,
@@ -2286,8 +2294,41 @@ function createOccupancyCard(name, rows) {
     list.append(item);
   });
 
-  article.append(header, control, metric, list);
+  article.append(header, contractBlock, metric, list);
   return article;
+}
+
+function createContractBlock({ contractedPercent, targetHours, totalMinutes, occupancy, name }) {
+  if (contractedPercent) {
+    const block = document.createElement("div");
+    block.className = "contract-block";
+
+    const percent = document.createElement("strong");
+    percent.textContent = `Ocupación contratada CSV: ${formatPercent(contractedPercent)}`;
+
+    const base = document.createElement("span");
+    base.textContent = `Base calculada: ${formatTargetHours(targetHours)} de ${defaultWeeklyTargetHours} h`;
+
+    const calc = document.createElement("span");
+    calc.textContent = `Cálculo: ${formatHours(totalMinutes)} / ${formatTargetHours(targetHours)} = ${occupancy}%`;
+
+    block.append(percent, base, calc);
+    return block;
+  }
+
+  const control = document.createElement("label");
+  control.className = "target-control";
+  const label = document.createElement("span");
+  label.textContent = "Base h/semana";
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "1";
+  input.max = "60";
+  input.step = "0.5";
+  input.value = String(targetHours);
+  input.addEventListener("change", () => updateTeacherTarget(name, input.value));
+  control.append(label, input);
+  return control;
 }
 
 function updateTeacherTarget(name, rawValue) {
@@ -2561,12 +2602,12 @@ function formatHours(minutes) {
 }
 
 function getTeacherTargetHours(name, rows = []) {
-  const configured = Number(state.teacherTargets[name]);
-  if (Number.isFinite(configured) && configured > 0) return configured;
   const contractedPercent = contractedPercentForRows(rows);
   if (!isTeacherPortal && contractedPercent) {
     return (defaultWeeklyTargetMinutes * contractedPercent) / 100 / 60;
   }
+  const configured = Number(state.teacherTargets[name]);
+  if (Number.isFinite(configured) && configured > 0) return configured;
   return defaultWeeklyTargetHours;
 }
 
