@@ -551,6 +551,136 @@ body.is-mobile-layout .mobile-schedule {
   gap: 14px;
 }
 
+.occupancy-chart {
+  margin-bottom: 16px;
+}
+
+.occupancy-chart-panel {
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.occupancy-chart-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  align-items: end;
+  gap: 20px;
+}
+
+.occupancy-chart-head h2 {
+  margin-top: 6px;
+  color: #334155;
+  font-size: clamp(1.35rem, 2vw, 1.9rem);
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.occupancy-chart-head p {
+  margin-top: 8px;
+  color: #657286;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.occupancy-chart-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(88px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--line);
+}
+
+.occupancy-chart-kpis div {
+  min-width: 0;
+  background: #f8faff;
+  padding: 12px;
+}
+
+.occupancy-chart-kpis span {
+  display: block;
+  color: #8d99ac;
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.occupancy-chart-kpis strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--violet);
+  font-size: 1.45rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.occupancy-chart-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.occupancy-chart-row {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #edf1f8;
+  border-radius: 18px;
+  background: #fbfcff;
+  padding: 13px 14px;
+}
+
+.occupancy-chart-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.occupancy-chart-row-top strong {
+  min-width: 0;
+  color: #334155;
+  font-size: 0.95rem;
+  font-weight: 950;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.occupancy-chart-row-top span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: var(--violet);
+  font-weight: 950;
+  padding: 5px 10px;
+}
+
+.occupancy-chart-track {
+  overflow: hidden;
+  height: 13px;
+  border-radius: 999px;
+  background: #e5ebf5;
+}
+
+.occupancy-chart-fill {
+  display: block;
+  width: var(--bar-width);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6757f4, #2878d9);
+}
+
+.occupancy-chart-row p {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 850;
+  line-height: 1.3;
+}
+
 .availability-panel {
   display: grid;
   gap: 18px;
@@ -850,7 +980,7 @@ body.is-mobile-layout .mobile-schedule {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--violet), #21b992);
+  background: linear-gradient(90deg, var(--violet), #2878d9);
 }
 
 .entity-chip {
@@ -970,6 +1100,27 @@ body.is-mobile-layout .mobile-schedule {
 
   .occupancy-grid {
     grid-template-columns: 1fr;
+  }
+
+  .occupancy-chart-panel {
+    border-radius: 22px;
+    padding: 16px;
+  }
+
+  .occupancy-chart-head {
+    grid-template-columns: 1fr;
+  }
+
+  .occupancy-chart-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .occupancy-chart-row-top {
+    align-items: flex-start;
+  }
+
+  .occupancy-chart-row-top strong {
+    white-space: normal;
   }
 
   .availability-controls,
@@ -1240,6 +1391,7 @@ body.is-mobile-layout .mobile-schedule {
       </section>
 
       <section id="occupancyView" class="view list-view" hidden>
+        <div id="occupancyChart" class="occupancy-chart"></div>
         <div id="occupancyList" class="occupancy-grid"></div>
       </section>
 
@@ -1333,6 +1485,7 @@ const elements = {
   subjectsView: document.querySelector("#subjectsView"),
   roomsList: document.querySelector("#roomsList"),
   teachersList: document.querySelector("#teachersList"),
+  occupancyChart: document.querySelector("#occupancyChart"),
   occupancyList: document.querySelector("#occupancyList"),
   availabilityResult: document.querySelector("#availabilityResult"),
   freeDaySelect: document.querySelector("#freeDaySelect"),
@@ -2246,9 +2399,12 @@ function createMetricBlock(metric) {
 }
 
 function renderOccupancyView() {
+  elements.occupancyChart.replaceChildren();
   elements.occupancyList.replaceChildren();
   const groups = groupBy(state.filteredRows, "teacher");
-  if (!groups.size) {
+  const entries = getTeacherOccupancyEntries(groups);
+
+  if (!entries.length) {
     const note = document.createElement("p");
     note.className = "muted-note";
     note.textContent = "No hay profesores con los filtros actuales.";
@@ -2256,10 +2412,113 @@ function renderOccupancyView() {
     return;
   }
 
-  [...groups.entries()]
+  renderOccupancyChart(entries);
+  entries
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, "es"))
+    .forEach((entry) => elements.occupancyList.append(createOccupancyCard(entry.name, entry.rows)));
+}
+
+function getTeacherOccupancyEntries(groups) {
+  return [...groups.entries()]
     .filter(([name]) => name !== "Sin indicar")
-    .sort((a, b) => a[0].localeCompare(b[0], "es"))
-    .forEach(([name, rows]) => elements.occupancyList.append(createOccupancyCard(name, rows)));
+    .map(([name, rows]) => {
+      const totalMinutes = sumDuration(rows);
+      const contractedPercent = contractedPercentForRows(rows);
+      const targetHours = getTeacherTargetHours(name, rows);
+      const occupancy = occupancyPercent(totalMinutes, targetHours);
+      return {
+        name,
+        rows,
+        totalMinutes,
+        contractedPercent,
+        targetHours,
+        occupancy,
+      };
+    });
+}
+
+function renderOccupancyChart(entries) {
+  const sorted = entries.slice().sort((a, b) => b.occupancy - a.occupancy || a.name.localeCompare(b.name, "es"));
+  const average = Math.round(sorted.reduce((total, entry) => total + entry.occupancy, 0) / sorted.length);
+  const contractedCount = sorted.filter((entry) => entry.contractedPercent).length;
+  const overTarget = sorted.filter((entry) => entry.occupancy > 100).length;
+
+  const panel = document.createElement("article");
+  panel.className = "occupancy-chart-panel";
+
+  const head = document.createElement("header");
+  head.className = "occupancy-chart-head";
+
+  const copy = document.createElement("div");
+  const label = document.createElement("span");
+  label.className = "label";
+  label.textContent = "Resumen";
+  const title = document.createElement("h2");
+  title.textContent = "Ocupación por profesor";
+  const text = document.createElement("p");
+  text.textContent = `El porcentaje se calcula con la columna Ocupación contratada del CSV. Base completa: ${defaultWeeklyTargetHours} h semanales.`;
+  copy.append(label, title, text);
+
+  const kpis = document.createElement("div");
+  kpis.className = "occupancy-chart-kpis";
+  [
+    ["Profesores", String(sorted.length)],
+    ["Media", `${average}%`],
+    ["Con contrato CSV", String(contractedCount)],
+    ["Sobre base", String(overTarget)],
+  ].forEach(([name, value]) => {
+    const item = document.createElement("div");
+    const itemLabel = document.createElement("span");
+    itemLabel.textContent = name;
+    const itemValue = document.createElement("strong");
+    itemValue.textContent = value;
+    item.append(itemLabel, itemValue);
+    kpis.append(item);
+  });
+
+  head.append(copy, kpis);
+
+  const list = document.createElement("div");
+  list.className = "occupancy-chart-list";
+  sorted.forEach((entry) => list.append(createOccupancyChartRow(entry)));
+
+  panel.append(head, list);
+  elements.occupancyChart.append(panel);
+}
+
+function createOccupancyChartRow(entry) {
+  const row = document.createElement("div");
+  row.className = "occupancy-chart-row";
+  row.classList.toggle("is-over", entry.occupancy > 100);
+  row.style.setProperty("--bar-width", `${Math.min(entry.occupancy, 100)}%`);
+
+  const top = document.createElement("div");
+  top.className = "occupancy-chart-row-top";
+
+  const name = document.createElement("strong");
+  name.textContent = entry.name;
+  const value = document.createElement("span");
+  value.textContent = `${entry.occupancy}%`;
+  top.append(name, value);
+
+  const track = document.createElement("div");
+  track.className = "occupancy-chart-track";
+  const fill = document.createElement("span");
+  fill.className = "occupancy-chart-fill";
+  track.append(fill);
+
+  const meta = document.createElement("p");
+  meta.textContent = [
+    `${formatHours(entry.totalMinutes)} de clase`,
+    entry.contractedPercent
+      ? `contrato ${formatPercent(entry.contractedPercent)} (${formatTargetHours(entry.targetHours)})`
+      : `base ${formatTargetHours(entry.targetHours)}`,
+    `${entry.rows.length} clases`,
+  ].join(" · ");
+
+  row.append(top, track, meta);
+  return row;
 }
 
 function createOccupancyCard(name, rows) {
