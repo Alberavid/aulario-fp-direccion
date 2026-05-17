@@ -1394,13 +1394,14 @@ elements.tabs.forEach((tab) => {
 async function boot() {
   state.teacherTargets = readTeacherTargets();
   await primeBundledCsv();
+  if (state.defaultCsv) {
+    localStorage.removeItem(storageKey);
+    loadCsvText(state.defaultCsv, "PLANIFICADOR DE AULAS (1).csv", new Date().toISOString(), false);
+    return;
+  }
   const stored = readStoredCsv();
   if (stored?.text) {
     loadCsvText(stored.text, stored.name || "CSV guardado", stored.loadedAt);
-    return;
-  }
-  if (state.defaultCsv) {
-    loadCsvText(state.defaultCsv, "PLANIFICADOR DE AULAS (1).csv", new Date().toISOString(), false);
     return;
   }
   render();

@@ -1,10 +1,10 @@
 Horario,Día ,Planta,Aula,Asignatura,Ciclo / Master ,Curso,Grupo,Profesor ,Sede,Ocupación contratada
-8:15,Lunes,2,WIFI,Itinerario personal para la Empleabilidad I.,ASIR,1º,A,Alberto Gonzalez Gómez,Moncloa,100%
+8:15,Lunes,2,WIFI,Itinerario personal para la Empleabilidad I.,ASIR,1º,A,Alberto Gonzalez Gómez,Moncloa,30%
 8:15,Lunes,2,LAN,Planificación y Administración de Redes.,ASIR,1º,B,Ricardo Delgado Fernández,Moncloa,30%
 8:15,Lunes,1,FRONTEND,Programación,DAM,1º,A,Jose Javier Durán,Moncloa,30%
-8:15,Lunes,2,ANDROID,Programación,DAM,1º,B,Andrea Nevado Labrador,Moncloa,100%
-8:15,Lunes,1,IOS,Bases de datos,DAMDAW,1º,,Carmen Macia Segura,Moncloa,100%
-8:15,Lunes,1,IOS,Bases de datos,DAW,1º,A,Carmen Macia Segura,Moncloa,100%
+8:15,Lunes,2,ANDROID,Programación,DAM,1º,B,Andrea Nevado Labrador,Moncloa,30%
+8:15,Lunes,1,IOS,Bases de datos,DAMDAW,1º,,Carmen Macia Segura,Moncloa,30%
+8:15,Lunes,1,IOS,Bases de datos,DAW,1º,A,Carmen Macia Segura,Moncloa,30%
 8:15,Lunes,1,HARDWARE,Montaje y mantenimiento de equipo.,SMR,1º,A,Ernesto Carlos Bravo Serrano,Moncloa,30%
 9:10,Lunes,2,WIFI,Fundamentos de Hardware.,ASIR,1º,A,Antonio Luis Cardador Cabello,Moncloa,30%
 9:10,Lunes,2,LAN,Planificación y Administración de Redes.,ASIR,1º,B,Ricardo Delgado Fernández,Moncloa,30%
