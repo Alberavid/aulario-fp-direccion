@@ -566,7 +566,7 @@ body.is-mobile-layout .mobile-schedule {
 .occupancy-chart-head {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-  align-items: end;
+  align-items: start;
   gap: 20px;
 }
 
@@ -587,7 +587,7 @@ body.is-mobile-layout .mobile-schedule {
 
 .occupancy-chart-kpis {
   display: grid;
-  grid-template-columns: repeat(4, minmax(88px, 1fr));
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
   gap: 1px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -616,6 +616,79 @@ body.is-mobile-layout .mobile-schedule {
   font-size: 1.45rem;
   font-weight: 950;
   line-height: 1;
+}
+
+.occupancy-chart-tools {
+  display: grid;
+  gap: 12px;
+}
+
+.occupancy-percent-filter {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto auto;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #f8faff;
+  padding: 12px;
+}
+
+.occupancy-percent-filter label {
+  min-width: 0;
+}
+
+.occupancy-percent-filter span {
+  display: block;
+  color: #8d99ac;
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.occupancy-percent-filter input {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 6px;
+  border: 1px solid #dfe6f1;
+  border-radius: 14px;
+  background: #fff;
+  color: #334155;
+  font-weight: 950;
+  padding: 0 12px;
+}
+
+.occupancy-percent-filter button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 950;
+  padding: 0 14px;
+  text-transform: uppercase;
+}
+
+.occupancy-percent-filter button[type="submit"] {
+  background: var(--violet);
+  color: #fff;
+}
+
+.occupancy-percent-filter button[type="button"] {
+  background: #e9eef7;
+  color: #536176;
+}
+
+.occupancy-percent-filter button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.occupancy-percent-filter p {
+  grid-column: 1 / -1;
+  color: #657286;
+  font-size: 0.82rem;
+  font-weight: 850;
+  line-height: 1.3;
 }
 
 .occupancy-chart-list {
@@ -672,6 +745,10 @@ body.is-mobile-layout .mobile-schedule {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #6757f4, #2878d9);
+}
+
+.occupancy-chart-row.is-missing .occupancy-chart-fill {
+  background: #cbd5e1;
 }
 
 .occupancy-chart-row p {
@@ -1115,6 +1192,10 @@ body.is-mobile-layout .mobile-schedule {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .occupancy-percent-filter {
+    grid-template-columns: 1fr;
+  }
+
   .occupancy-chart-row-top {
     align-items: flex-start;
   }
@@ -1454,6 +1535,7 @@ const state = {
   defaultCsv: "",
   error: "",
   teacherTargets: {},
+  occupancyContractMax: "",
 };
 
 const elements = {
@@ -2417,6 +2499,7 @@ function renderOccupancyView() {
   elements.occupancyList.replaceChildren();
   const groups = groupBy(state.filteredRows, "teacher");
   const entries = getTeacherOccupancyEntries(groups);
+  const filteredEntries = filterOccupancyEntries(entries);
 
   if (!entries.length) {
     const note = document.createElement("p");
@@ -2426,11 +2509,25 @@ function renderOccupancyView() {
     return;
   }
 
-  renderOccupancyChart(entries);
-  entries
+  renderOccupancyChart(filteredEntries, entries);
+  if (!filteredEntries.length) {
+    const note = document.createElement("p");
+    note.className = "muted-note";
+    note.textContent = "No hay profesores con ese porcentaje contratado.";
+    elements.occupancyList.append(note);
+    return;
+  }
+
+  filteredEntries
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, "es"))
     .forEach((entry) => elements.occupancyList.append(createOccupancyCard(entry.name, entry.rows)));
+}
+
+function filterOccupancyEntries(entries) {
+  const maxPercent = parseContractedOccupancy(state.occupancyContractMax);
+  if (!maxPercent) return entries;
+  return entries.filter((entry) => Number.isFinite(entry.contractedPercent) && entry.contractedPercent <= maxPercent);
 }
 
 function getTeacherOccupancyEntries(groups) {
@@ -2452,11 +2549,16 @@ function getTeacherOccupancyEntries(groups) {
     });
 }
 
-function renderOccupancyChart(entries) {
-  const sorted = entries.slice().sort((a, b) => b.occupancy - a.occupancy || a.name.localeCompare(b.name, "es"));
-  const average = Math.round(sorted.reduce((total, entry) => total + entry.occupancy, 0) / sorted.length);
-  const contractedCount = sorted.filter((entry) => entry.contractedPercent).length;
-  const overTarget = sorted.filter((entry) => entry.occupancy > 100).length;
+function renderOccupancyChart(entries, allEntries = entries) {
+  const sorted = entries
+    .slice()
+    .sort((a, b) => (a.contractedPercent ?? 9999) - (b.contractedPercent ?? 9999) || a.name.localeCompare(b.name, "es"));
+  const contractedValues = sorted
+    .map((entry) => entry.contractedPercent)
+    .filter((percent) => Number.isFinite(percent) && percent > 0);
+  const averageContract = contractedValues.length
+    ? Math.round(contractedValues.reduce((total, percent) => total + percent, 0) / contractedValues.length)
+    : null;
 
   const panel = document.createElement("article");
   panel.className = "occupancy-chart-panel";
@@ -2469,18 +2571,19 @@ function renderOccupancyChart(entries) {
   label.className = "label";
   label.textContent = "Resumen";
   const title = document.createElement("h2");
-  title.textContent = "Ocupación por profesor";
+  title.textContent = "Ocupación contratada por profesor";
   const text = document.createElement("p");
-  text.textContent = `El porcentaje se calcula con la columna Ocupación contratada del CSV. Base completa: ${defaultWeeklyTargetHours} h semanales.`;
+  text.textContent = "La gráfica toma directamente la columna Ocupación contratada del CSV. El filtro permite ver profesores con ese porcentaje o inferior.";
   copy.append(label, title, text);
+
+  const tools = document.createElement("div");
+  tools.className = "occupancy-chart-tools";
 
   const kpis = document.createElement("div");
   kpis.className = "occupancy-chart-kpis";
   [
-    ["Profesores", String(sorted.length)],
-    ["Media", `${average}%`],
-    ["Con contrato CSV", String(contractedCount)],
-    ["Sobre base", String(overTarget)],
+    ["Profesores mostrados", String(sorted.length)],
+    ["Media contrato", averageContract === null ? "-" : `${averageContract}%`],
   ].forEach(([name, value]) => {
     const item = document.createElement("div");
     const itemLabel = document.createElement("span");
@@ -2490,22 +2593,75 @@ function renderOccupancyChart(entries) {
     item.append(itemLabel, itemValue);
     kpis.append(item);
   });
+  tools.append(kpis, createOccupancyPercentFilter(allEntries.length));
 
-  head.append(copy, kpis);
+  head.append(copy, tools);
 
   const list = document.createElement("div");
   list.className = "occupancy-chart-list";
-  sorted.forEach((entry) => list.append(createOccupancyChartRow(entry)));
+  if (sorted.length) {
+    sorted.forEach((entry) => list.append(createOccupancyChartRow(entry)));
+  } else {
+    const note = document.createElement("p");
+    note.className = "muted-note";
+    note.textContent = "Ajusta el filtro para ver resultados.";
+    list.append(note);
+  }
 
   panel.append(head, list);
   elements.occupancyChart.append(panel);
 }
 
+function createOccupancyPercentFilter(totalEntries) {
+  const form = document.createElement("form");
+  form.className = "occupancy-percent-filter";
+
+  const label = document.createElement("label");
+  const labelText = document.createElement("span");
+  labelText.textContent = "Filtrar contrato hasta";
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "1";
+  input.max = "100";
+  input.step = "1";
+  input.placeholder = "Ej. 50";
+  input.value = state.occupancyContractMax;
+  label.append(labelText, input);
+
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.textContent = "Aplicar";
+
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.textContent = "Limpiar";
+  clear.disabled = !state.occupancyContractMax;
+
+  const help = document.createElement("p");
+  const maxPercent = parseContractedOccupancy(state.occupancyContractMax);
+  help.textContent = maxPercent
+    ? `Mostrando ${filterOccupancyEntries(getTeacherOccupancyEntries(groupBy(state.filteredRows, "teacher"))).length} de ${totalEntries} profesores con ${formatPercent(maxPercent)} o menos.`
+    : "Escribe 50 para ver profesores con 50% o menos.";
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.occupancyContractMax = clean(input.value);
+    render();
+  });
+  clear.addEventListener("click", () => {
+    state.occupancyContractMax = "";
+    render();
+  });
+
+  form.append(label, submit, clear, help);
+  return form;
+}
+
 function createOccupancyChartRow(entry) {
   const row = document.createElement("div");
   row.className = "occupancy-chart-row";
-  row.classList.toggle("is-over", entry.occupancy > 100);
-  row.style.setProperty("--bar-width", `${Math.min(entry.occupancy, 100)}%`);
+  row.classList.toggle("is-missing", !entry.contractedPercent);
+  row.style.setProperty("--bar-width", `${Math.min(entry.contractedPercent || 0, 100)}%`);
 
   const top = document.createElement("div");
   top.className = "occupancy-chart-row-top";
@@ -2513,7 +2669,7 @@ function createOccupancyChartRow(entry) {
   const name = document.createElement("strong");
   name.textContent = entry.name;
   const value = document.createElement("span");
-  value.textContent = `${entry.occupancy}%`;
+  value.textContent = entry.contractedPercent ? formatPercent(entry.contractedPercent) : "Sin dato";
   top.append(name, value);
 
   const track = document.createElement("div");
@@ -2524,10 +2680,10 @@ function createOccupancyChartRow(entry) {
 
   const meta = document.createElement("p");
   meta.textContent = [
+    "Columna Ocupación contratada",
     `${formatHours(entry.totalMinutes)} de clase`,
-    entry.contractedPercent
-      ? `contrato ${formatPercent(entry.contractedPercent)} (${formatTargetHours(entry.targetHours)})`
-      : `base ${formatTargetHours(entry.targetHours)}`,
+    `base ${formatTargetHours(entry.targetHours)}`,
+    `carga real ${entry.occupancy}%`,
     `${entry.rows.length} clases`,
   ].join(" · ");
 
